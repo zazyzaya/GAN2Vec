@@ -21,7 +21,7 @@ def load_haiku(embed_dim=64):
 	for i in range(len(haikus)):
 		haikus[i] = pipeline(haikus[i])
 	
-	with open(os.path.join(DATA_DIR, 'clean_haiku.data'), 'wb+') as f:
+	with open(os.path.join('clean_haiku.data'), 'wb+') as f:
 		pickle.dump(haikus, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 	w2v = Word2Vec(
