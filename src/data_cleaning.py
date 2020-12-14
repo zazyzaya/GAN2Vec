@@ -31,7 +31,8 @@ def load_haiku(embed_dim=64):
 		size=embed_dim, 
 		sg=1, 
 		workers=32, 
-		negative=20
+		negative=20,
+		min_count=1
 	)
 
 	w2v.save('w2v.model')

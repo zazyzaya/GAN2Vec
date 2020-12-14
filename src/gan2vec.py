@@ -16,7 +16,7 @@ class Generator(nn.Module):
         # really make a lot of sense to me... so I'm just using 
         # linear layers to see if it still works
         self.linears = nn.Sequential(
-            nn.Linear(latent_size, hidden_size), 
+            nn.Linear(latent_size+self.MAX_LEN-self.MIN_LEN+1, hidden_size), 
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
@@ -27,7 +27,7 @@ class Generator(nn.Module):
         self.recurrent = nn.LSTM(out_size, out_size, batch_first=True)
 
     def forward(self, batch_size, sentence_len=5):
-        len_one_hot = torch.zeros(batch_size, self.MAX_LEN-self.MIN_LEN)
+        len_one_hot = torch.zeros(batch_size, self.MAX_LEN-self.MIN_LEN+1)
         len_one_hot[:, self.MAX_LEN-sentence_len] = 1
 
         # Tell the encoder how long the sentence will be 
@@ -52,7 +52,12 @@ class Discriminator(nn.Module):
         self.embed_size = embed_size
 
         self.recurrent = nn.Sequential(
-            nn.LSTM(embed_size, hidden_size, num_layers=3), 
+            nn.LSTM(
+                embed_size, 
+                hidden_size, 
+                num_layers=3, 
+                batch_first=True
+            ), 
         )
 
         self.decider = nn.Sequential(
@@ -63,5 +68,4 @@ class Discriminator(nn.Module):
     def forward(self, x):
         _, (x, _) = self.recurrent(x)
         x = x[-1]
-
         return self.decider(x)
