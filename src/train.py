@@ -9,12 +9,8 @@ from gan2vec import Discriminator, Generator
 from torch.nn.utils.rnn import pack_padded_sequence
 from gensim.models import Word2Vec
 
-<<<<<<< HEAD
-DATA_DIR = '../data/'
-=======
 DATA_DIR = 'data'
->>>>>>> 9fc11f9222d2299c831a7295ec71b219fa1e2d2c
-IN_TEXT = 'clean_haiku.data'
+IN_TEXT = 'cleaned_haiku.data'
 IN_W2V  = 'w2v_haiku.model'
 
 text = encoder = None 
@@ -41,15 +37,9 @@ def get_lines(start,end):
 
         sentence = []        
         for w in l:
-            try:
-                sentence.append(torch.tensor(encoder.wv[w]))
-            except:
-                print(w)
-                continue
-
+            sentence.append(torch.tensor(encoder.wv[w]))
+            
         sentences.append(torch.stack(sentence).unsqueeze(0))
-
-    print(len(sentences))
 
     # Pad input 
     d_size = sentences[0].size(2)
@@ -117,5 +107,7 @@ def train(epochs, batch_size=256, latent_size=64):
         if e % 10 == 0:
             torch.save(G, 'generator.model')
 
+    torch.save(G, 'generator.model')
+
 if __name__ == '__main__':
-    train(50)
+    train(500)
