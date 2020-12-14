@@ -8,7 +8,7 @@ from gan2vec import Discriminator, Generator
 from torch.nn.utils.rnn import pack_padded_sequence
 from gensim.models import Word2Vec
 
-DATA_DIR = '/Users/isaiah/Documents/Programming/Python/GAN2Vec/data/'
+DATA_DIR = '../data/'
 IN_TEXT = 'clean_haiku.data'
 IN_W2V  = 'w2v_haiku.model'
 

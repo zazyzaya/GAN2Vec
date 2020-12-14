@@ -52,7 +52,7 @@ class Discriminator(nn.Module):
         self.embed_size = embed_size
 
         self.recurrent = nn.Sequential(
-            nn.LSTM(embed_size, hidden_size, num_layers=3), 
+            nn.LSTM(embed_size, hidden_size, num_layers=3, batch_first=True), 
         )
 
         self.decider = nn.Sequential(

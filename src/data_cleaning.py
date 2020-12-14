@@ -1,37 +1,36 @@
 import os 
 import pickle
+import string 
 import pandas as pd 
 
 from gensim.models import Word2Vec
 
 DATA_DIR = '../data'
 
+
+def pipeline(s):
+	s = ' '.join(s)
+	s = s.replace('--', ' ')
+	s = s.translate(str.maketrans('', '', string.punctuation))
+	return s.split(' ')
+
 def load_haiku(embed_dim=64):
-	df = pd.read_csv(os.path.join(DATA_DIR, 'all_haiku.csv'))
-	df = df['0'] + ' ' + df['1'] + ' ' + df['2']
+	with open(os.path.join(DATA_DIR, 'clean_haiku.data'), 'rb') as f:
+		haikus = pickle.load(f)
 
-	hdirty = list(df)
-	haikus = []
-	for h in hdirty:
-		try:
-			haikus.append(
-				h.lower().replace('  ', ' ').split(' ')
-			)
-		except: # Quick n dirty way to fix nan errors 
-			pass	
-
-	del hdirty 
-	del df 
-
-	with open('clean_haiku.data', 'wb+') as outf:
-		pickle.dump(haikus, outf, pickle.HIGHEST_PROTOCOL)
+	for i in range(len(haikus)):
+		haikus[i] = pipeline(haikus[i])
+	
+	with open(os.path.join(DATA_DIR, 'clean_haiku.data'), 'wb+') as f:
+		pickle.dump(haikus, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 	w2v = Word2Vec(
 		sentences=haikus, 
 		size=embed_dim, 
 		sg=1, 
 		workers=32, 
-		negative=20
+		negative=20,
+		min_count=1
 	)
 
 	w2v.save('w2v.model')
