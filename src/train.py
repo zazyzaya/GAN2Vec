@@ -1,5 +1,6 @@
 import torch 
 import pickle 
+import os 
 
 from torch import nn 
 from random import randint
@@ -8,7 +9,11 @@ from gan2vec import Discriminator, Generator
 from torch.nn.utils.rnn import pack_padded_sequence
 from gensim.models import Word2Vec
 
+<<<<<<< HEAD
 DATA_DIR = '../data/'
+=======
+DATA_DIR = 'data'
+>>>>>>> 9fc11f9222d2299c831a7295ec71b219fa1e2d2c
 IN_TEXT = 'clean_haiku.data'
 IN_W2V  = 'w2v_haiku.model'
 
@@ -16,13 +21,12 @@ text = encoder = None
 
 def get_data():
     global text, encoder 
-
     if text:
         return 
 
-    with open(DATA_DIR + IN_TEXT, 'rb') as f:
+    with open(os.path.join(DATA_DIR, IN_TEXT), 'rb') as f:
         text = pickle.load(f)
-    encoder = Word2Vec.load(DATA_DIR+IN_W2V)
+    encoder = Word2Vec.load(os.path.join(DATA_DIR, IN_W2V))
 
 
 def get_lines(start,end):
@@ -40,9 +44,12 @@ def get_lines(start,end):
             try:
                 sentence.append(torch.tensor(encoder.wv[w]))
             except:
+                print(w)
                 continue
 
         sentences.append(torch.stack(sentence).unsqueeze(0))
+
+    print(len(sentences))
 
     # Pad input 
     d_size = sentences[0].size(2)
@@ -78,7 +85,7 @@ def train(epochs, batch_size=256, latent_size=64):
 
     for e in range(epochs):
         start = randint(0, num_samples-batch_size-1)
-        slen = randint(G.MIN_LEN, G.MAX_LEN-1)
+        slen = randint(5,10)
         
         tl = torch.full((batch_size, 1), 1.0)
         fl = torch.zeros((batch_size, 1))
@@ -88,8 +95,8 @@ def train(epochs, batch_size=256, latent_size=64):
         real = get_lines(start, start+batch_size)
         fake = G(batch_size, sentence_len=slen)
 
-        r_loss = loss(real, tl)
-        f_loss = loss(fake, fl)
+        r_loss = loss(D(real), tl)
+        f_loss = loss(D(fake), fl)
 
         r_loss.backward()
         f_loss.backward()
