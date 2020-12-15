@@ -1,15 +1,18 @@
 import torch 
 import pickle 
 import os 
+import time 
 
 from torch import nn 
 from random import randint
 from torch.optim import Adam 
-from gan2vec import Discriminator, Generator
+from gan2vec import Discriminator#, Generator
+from gan2vec_conv import ConvGenerator
 from torch.nn.utils.rnn import pack_padded_sequence
 from gensim.models import Word2Vec
 
 DATA_DIR = 'data'
+#DATA_DIR = 'code/GAN2Vec/data' # For debugger
 IN_TEXT = 'cleaned_haiku.data'
 IN_W2V  = 'w2v_haiku.model'
 
@@ -52,7 +55,10 @@ def get_lines(start,end):
                 dim=1
             )
 
+    # Need to squish sentences into [0,1] domain
     seq = torch.cat(sentences, dim=0)
+    #seq = torch.sigmoid(seq)
+    start_words = seq[:, 0:1, :]
     packer = pack_padded_sequence(
         seq, 
         seq_lens, 
@@ -60,54 +66,91 @@ def get_lines(start,end):
         enforce_sorted=False
     )    
 
-    return packer 
+    return packer , start_words
 
-def train(epochs, batch_size=256, latent_size=64):
+def get_closest(sentences):
+    scores = []
+    wv = encoder.wv
+    for s in sentences.detach().numpy():
+        st = [
+            wv[wv.most_similar([s[i]], topn=1)[0][0]]
+            for i in range(s.shape[0])
+        ]
+        scores.append(torch.tensor(st))
+
+    return torch.stack(scores, dim=0)
+
+def train(epochs, batch_size=256, latent_size=256):
     get_data()
     num_samples = len(text)
 
-    G = Generator(latent_size, 64)
+    G = ConvGenerator(64, hidden=128, latent_size=2)
     D = Discriminator(64)
 
+    l2 = nn.MSELoss()
     loss = nn.BCELoss()
-    opt_g = Adam(G.parameters(), lr=0.001)
-    opt_d = Adam(D.parameters(), lr=0.001)
+    opt_d = Adam(D.parameters(), lr=0.002, betas=(0.5, 0.999))
+    opt_g = Adam(G.parameters(), lr=0.002, betas=(0.5, 0.999))
 
     for e in range(epochs):
-        start = randint(0, num_samples-batch_size-1)
-        slen = randint(5,10)
-        
-        tl = torch.full((batch_size, 1), 1.0)
-        fl = torch.zeros((batch_size, 1))
+        i = 0
+        while batch_size*i < num_samples:
+            stime = time.time()
+            
+            start = batch_size*i
+            end = min(batch_size*(i+1), num_samples)
+            bs = end-start
 
-        # Train descriminator 
-        opt_d.zero_grad() 
-        real = get_lines(start, start+batch_size)
-        fake = G(batch_size, sentence_len=slen)
+            # Use lable smoothing
+            tl = torch.full((bs, 1), 0.9)
+            fl = torch.full((bs, 1), 0.1)
 
-        r_loss = loss(D(real), tl)
-        f_loss = loss(D(fake), fl)
+            # Train descriminator 
+            opt_d.zero_grad() 
+            real, _ = get_lines(start, end)
+            fake = G(bs)
 
-        r_loss.backward()
-        f_loss.backward()
-        d_loss = (r_loss.mean().item() + f_loss.mean().item()) / 2
-        opt_d.step()
+            r_loss = loss(D(real), tl)
+            f_loss = loss(D(fake), fl)
 
-        # Train generator 
-        opt_d.zero_grad() 
-        fake = G(batch_size, sentence_len=slen)
-        g_loss = loss(D(fake), tl)
-        g_loss.backward() 
-        opt_g.step() 
+            r_loss.backward()
+            f_loss.backward()
+            d_loss = (r_loss.mean().item() + f_loss.mean().item()) / 2
+            opt_d.step()
 
-        g_loss = g_loss.item() 
+            # Train generator 
+            opt_d.zero_grad() 
 
-        print('[%d] D Loss: %0.6f\tG Loss %0.6f' % (e, d_loss, g_loss))
+            # GAN fooling ability
+            fake = G(bs)
+            g_loss = loss(D(fake), tl)
+            g_loss.backward() 
+            opt_g.step() 
+            g_loss = g_loss.item() 
+
+            '''
+            # Word embedding similarity (less important)
+            if e % 10 == 0:
+                fake = G(bs)
+                l2_loss = l2(fake, get_closest(fake))
+                l2_loss.backward()
+                l2_loss = l2_loss.item()
+            else:
+                l2_loss = float('nan')
+            '''
+
+            print(
+                '[%d] D Loss: %0.3f\tG Loss %0.3f   (%0.1fs)' % 
+                (e, d_loss, g_loss, time.time()-stime)
+            )
+
+            i += 1
 
         if e % 10 == 0:
             torch.save(G, 'generator.model')
 
     torch.save(G, 'generator.model')
 
+torch.set_num_threads(16)
 if __name__ == '__main__':
-    train(500)
+    train(1000, batch_size=2048)
