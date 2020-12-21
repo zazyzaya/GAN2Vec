@@ -4,10 +4,11 @@ import os
 import time 
 
 from torch import nn 
+from torch.autograd import Variable 
 from random import randint
 from torch.optim import Adam 
-from gan2vec import Discriminator#, Generator
-from gan2vec_conv import ConvGenerator
+from gan2vec import Discriminator, Generator
+#from gan2vec_conv import ConvGenerator
 from torch.nn.utils.rnn import pack_padded_sequence
 from gensim.models import Word2Vec
 
@@ -24,7 +25,7 @@ def get_data():
         return 
 
     with open(os.path.join(DATA_DIR, IN_TEXT), 'rb') as f:
-        text = pickle.load(f)
+        text = pickle.load(f)[:256]
     encoder = Word2Vec.load(os.path.join(DATA_DIR, IN_W2V))
 
 
@@ -80,11 +81,11 @@ def get_closest(sentences):
 
     return torch.stack(scores, dim=0)
 
-def train(epochs, batch_size=256, latent_size=256):
+def train(epochs, batch_size=256, latent_size=256, K=1):
     get_data()
     num_samples = len(text)
 
-    G = ConvGenerator(64, hidden=128, latent_size=2)
+    G = Generator(64, 64)
     D = Discriminator(64)
 
     l2 = nn.MSELoss()
@@ -107,8 +108,8 @@ def train(epochs, batch_size=256, latent_size=256):
 
             # Train descriminator 
             opt_d.zero_grad() 
-            real, _ = get_lines(start, end)
-            fake = G(bs)
+            real, greal = get_lines(start, end)
+            fake = G(greal)
 
             r_loss = loss(D(real), tl)
             f_loss = loss(D(fake), fl)
@@ -119,28 +120,19 @@ def train(epochs, batch_size=256, latent_size=256):
             opt_d.step()
 
             # Train generator 
-            opt_d.zero_grad() 
+            for _ in range(K):
+                opt_g.zero_grad() 
 
-            # GAN fooling ability
-            fake = G(bs)
-            g_loss = loss(D(fake), tl)
-            g_loss.backward() 
-            opt_g.step() 
+                # GAN fooling ability
+                fake = G(greal) 
+                g_loss = loss(D(fake), tl)
+                g_loss.backward()
+                opt_g.step() 
+                
             g_loss = g_loss.item() 
 
-            '''
-            # Word embedding similarity (less important)
-            if e % 10 == 0:
-                fake = G(bs)
-                l2_loss = l2(fake, get_closest(fake))
-                l2_loss.backward()
-                l2_loss = l2_loss.item()
-            else:
-                l2_loss = float('nan')
-            '''
-
             print(
-                '[%d] D Loss: %0.3f\tG Loss %0.3f   (%0.1fs)' % 
+                '[%d] D Loss: %0.3f  G Loss %0.3f  (%0.1fs)' % 
                 (e, d_loss, g_loss, time.time()-stime)
             )
 
@@ -153,4 +145,4 @@ def train(epochs, batch_size=256, latent_size=256):
 
 torch.set_num_threads(16)
 if __name__ == '__main__':
-    train(1000, batch_size=2048)
+    train(1000, batch_size=256)

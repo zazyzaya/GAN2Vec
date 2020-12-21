@@ -80,12 +80,57 @@ class Discriminator(nn.Module):
             ), 
         )
 
+        self.mbd = MinibatchDiscrimination(hidden_size, hidden_size)
         self.decider = nn.Sequential(
-            nn.Linear(hidden_size, 1),
+            nn.Linear(hidden_size*2, 1),
             nn.Sigmoid()
         )
 
     def forward(self, x):
         _, (_, x) = self.recurrent(x)
         x = x[-1]
+
+        x = self.mbd(x)
         return self.decider(x)
+
+
+'''
+    Impliments Minibatch Discrimination to avoid same-looking output
+    Shamelessly stolen from https://gist.github.com/t-ae/
+'''
+class MinibatchDiscrimination(nn.Module):
+    def __init__(self, in_features, out_features, kernel_dims=64, mean=False):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.kernel_dims = kernel_dims
+        self.mean = mean
+        self.T = nn.Parameter(torch.Tensor(in_features, out_features, kernel_dims))
+        nn.init.normal_(self.T, 0, 1)
+
+    def forward(self, x):
+        # Outputs Batch x Out*Kernel 
+        matrices = x.mm(self.T.view(self.in_features, -1))
+
+        # Transforms to Batch x Out x Kernel
+        matrices = matrices.view(-1, self.out_features, self.kernel_dims)
+
+        # Now we quickly find distance from each X to every other
+        # X by viewing it as a 1 x Batch x Out x Kernel mat and a
+        #                      Batch x 1 x Out x Kernel mat 
+        # That way the difference along the kernel dimension is 
+        # equivilant to the dist from x to every other sample
+        M = matrices.unsqueeze(0)  
+        M_T = M.permute(1, 0, 2, 3) 
+
+        # Simple distance formula
+        norm = torch.abs(M - M_T).sum(3)  # Batch x Batch x Out
+        expnorm = torch.exp(-norm)
+        
+        # Add all distances together, and remove self distance (minus 1)
+        o_b = (expnorm.sum(0) - 1)   # Batch x Out 
+        if self.mean:
+            o_b /= x.size(0) - 1
+
+        x = torch.cat([x, o_b], 1)
+        return x

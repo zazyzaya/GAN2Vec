@@ -11,7 +11,10 @@ G = torch.load('generator.model')
 
 ipt = ''
 while('q' not in ipt):
-    s = G.generate(2)
+    rnd = randint(0, 256)
+    _, sw = get_lines(rnd, rnd+2)
+
+    s = G.generate(sw)
     s = s[0].detach().numpy()
     print(s.shape)
 
